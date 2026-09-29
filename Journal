@@ -1,0 +1,237 @@
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+
+class Address {
+    private String street;
+    private String houseNumber;
+    private String apartmentNumber;
+
+    public Address(String street, String houseNumber, String apartmentNumber) {
+        this.street = street;
+        this.houseNumber = houseNumber;
+        this.apartmentNumber = apartmentNumber;
+    }
+
+    @Override
+    public String toString() {
+        return "вул. " + street + ", буд. " + houseNumber + 
+               (apartmentNumber.isEmpty() ? "" : ", кв. " + apartmentNumber);
+    }
+}
+
+class JournalEntry {
+    private String lastName;
+    private String firstName;
+    private LocalDate birthDate;
+    private String phone;
+    private Address address;
+
+    public JournalEntry(String lastName, String firstName, LocalDate birthDate, String phone, Address address) {
+        this.lastName = lastName;
+        this.firstName = firstName;
+        this.birthDate = birthDate;
+        this.phone = phone;
+        this.address = address;
+    }
+
+    @Override
+    public String toString() {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        return String.format("Студент: %s %s | ДН: %s | Тел: %s | Адреса: %s",
+                lastName, firstName, birthDate.format(formatter), phone, address);
+    }
+}
+
+class JournalModel {
+    private final List entries = new ArrayList<>();
+
+    public void addEntry(JournalEntry entry) {
+        entries.add(entry);
+    }
+
+    public List getEntries() {
+        return entries;
+    }
+}
+
+class InputValidator {
+    private static final String NAME_REGEX = "^\\p{Lu}[\\p{L}\\-'’]{1,29}$";
+    private static final String PHONE_REGEX = "^(\\+?38)?0\\d{9}$";
+    private static final String STREET_REGEX = "^[\\p{Lu}0-9][\\p{L}0-9\\s\\-'.]{1,49}$";
+    private static final String HOUSE_APT_REGEX = "^[0-9]{1,4}[a-zA-Z\\p{L}/\\-]?$";
+
+    public static boolean validateName(String input) {
+        return Pattern.matches(NAME_REGEX, input);
+    }
+
+    public static boolean validatePhone(String input) {
+        return Pattern.matches(PHONE_REGEX, input);
+    }
+
+    public static boolean validateStreet(String input) {
+        return Pattern.matches(STREET_REGEX, input);
+    }
+
+    public static boolean validateHouseOrApt(String input) {
+        return Pattern.matches(HOUSE_APT_REGEX, input);
+    }
+
+    public static LocalDate parseAndValidateDate(String input) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        try {
+            LocalDate date = LocalDate.parse(input, formatter);
+            if (date.isAfter(LocalDate.now()) || date.isBefore(LocalDate.now().minusYears(100))) {
+                return null;
+            }
+            return date;
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+}
+
+class ConsoleView {
+    public void printMessage(String message) {
+        System.out.print(message);
+    }
+
+    public void printError(String error) {
+        System.out.println("[ПОМИЛКА] " + error);
+    }
+
+    public void printJournal(List entries) {
+        System.out.println("\n================ ЖУРНАЛ КУРАТОРА ================");
+        if (entries.isEmpty()) {
+            System.out.println("Журнал порожнiй.");
+        } else {
+            for (int i = 0; i < entries.size(); i++) {
+                System.out.println((i + 1) + ". " + entries.get(i));
+            }
+        }
+        System.out.println("=================================================");
+    }
+}
+
+class ConsoleController {
+    private final JournalModel model;
+    private final ConsoleView view;
+    private final Scanner scanner;
+
+    public ConsoleController(JournalModel model, ConsoleView view) {
+        this.model = model;
+        this.view = view;
+        this.scanner = new Scanner(System.in);
+    }
+
+    public void start() {
+        boolean running = true;
+        while (running) {
+            System.out.println("\n--- ОПЦIЇ ---");
+            System.out.println("1. Додати новий запис");
+            System.out.println("2. Показати всi записи");
+            System.out.println("3. Вийти");
+            view.printMessage("Оберiть дiю: ");
+
+            String choice = scanner.nextLine().trim();
+            switch (choice) {
+                case "1" -> processNewEntry();
+                case "2" -> view.printJournal(model.getEntries());
+                case "3" -> {
+                    running = false;
+                    view.printMessage("Роботу завершено.\n");
+                }
+                default -> view.printError("Некоректний вибiр. Спробуйте ще раз.");
+            }
+        }
+    }
+
+    private void processNewEntry() {
+        System.out.println("\n--- ВВЕДЕННЯ ДАНИХ СТУДЕНТА ---");
+
+        String lastName = readValidInput(
+                "Введiть прiзвище: ", 
+                InputValidator::validateName, 
+                "Прiзвище має починатися з великої лiтери та мiстити лише букви."
+        );
+
+        String firstName = readValidInput(
+                "Введiть iм'я: ", 
+                InputValidator::validateName, 
+                "Iм'я має починатися з великої лiтери та мiстити лише букви."
+        );
+
+        LocalDate birthDate = readValidDate(
+                "Введiть дату народження (формат ДД.ММ.РРРР, наприклад 15.05.2003): "
+        );
+
+        String phone = readValidInput(
+                "Введiть номер телефону (наприклад, +380971234567 або 0971234567): ", 
+                InputValidator::validatePhone, 
+                "Некоректний номер телефону."
+        );
+
+        System.out.println("\n--- ВВЕДЕННЯ АДРЕСИ ---");
+
+        String street = readValidInput(
+                "Введiть вулицю: ", 
+                InputValidator::validateStreet, 
+                "Некоректна назва вулицi."
+        );
+
+        String house = readValidInput(
+                "Введiть номер будинку: ", 
+                InputValidator::validateHouseOrApt, 
+                "Некоректний номер будинку (приклад: 10, 12B, 4/1)."
+        );
+
+        String apt = readValidInput(
+                "Введiть номер квартири (або натиснiть Enter, якщо приватний будинок): ", 
+                input -> input.isEmpty() || InputValidator.validateHouseOrApt(input), 
+                "Некоректний номер квартири."
+        );
+
+        Address address = new Address(street, house, apt);
+        JournalEntry entry = new JournalEntry(lastName, firstName, birthDate, phone, address);
+
+        model.addEntry(entry);
+        System.out.println("\n[УСПІХ] Запис успiшно додано до моделi!");
+    }
+
+    private String readValidInput(String prompt, Predicate<String>validator, String errorMessage) {
+        while (true) {
+            view.printMessage(prompt);
+            String input = scanner.nextLine().trim();
+            if (validator.test(input)) {
+                return input;
+            }
+            view.printError(errorMessage + " Повторiть введення.");
+        }
+    }
+
+    private LocalDate readValidDate(String prompt) {
+        while (true) {
+            view.printMessage(prompt);
+            String input = scanner.nextLine().trim();
+            LocalDate date = InputValidator.parseAndValidateDate(input);
+            if (date != null) {
+                return date;
+            }
+            view.printError("Некоректний формат дати або дата некоректна. Повторiть введення.");
+        }
+    }
+}
+public class JournalApp {
+    public static void main(String[] args) {
+        JournalModel model = new JournalModel();
+        ConsoleView view = new ConsoleView();
+        ConsoleController controller = new ConsoleController(model, view);
+
+        controller.start();
+    }
+}
